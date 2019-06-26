@@ -39,18 +39,14 @@ public:
 
     bool begin(const char * device); 
     bool begin(BLEServer *server); 
-
     void end();
-
-    size_t setRxBufferSize(size_t size);
     bool hasClient(void);
 
     int available(void) override;
 
     int peek(void) override; 
     int read(void) override; 
-    void flush(void) override;
-
+ 
     size_t write(uint8_t c) override
     {
         if (_deviceConnected && _pTxCharacteristic) 
