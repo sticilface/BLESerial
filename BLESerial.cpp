@@ -1,8 +1,9 @@
 
 
 /*
+  BLE UART Service written by SticilFace
 
- */
+*/
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -90,11 +91,7 @@ size_t BLESerial::setRxBufferSize(size_t size){
 
 int BLESerial::available(void)
 {
-    // int result = static_cast<int>(uart_rx_available(_uart));
-    // if (!result) {
-    //     optimistic_yield(10000);
-    // }
-    return 0 ; //result;
+    return _data.size() ; //result;
 }
 
 void BLESerial::flush()
@@ -116,13 +113,14 @@ void BLESerial::onWrite(BLECharacteristic *pCharacteristic)
 {
    std::string rxValue = pCharacteristic->getValue();
       if (rxValue.length() > 0) {
-        Serial.println("*********");
-        Serial.print("Received Value: ");
         for (int i = 0; i < rxValue.length(); i++)
-          Serial.print(rxValue[i]);
-
-        Serial.println();
-        Serial.println("*********");
+        {
+          if (_data.size() == 512) 
+          {
+            _data.pop(); 
+          }
+          _data.push(rxValue[i]);
+        }
       }   
 }
 
@@ -130,3 +128,22 @@ bool BLESerial::hasClient()
 {
   return _deviceConnected; 
 }
+
+
+int BLESerial::peek(void) 
+{
+  if (_data.size()) {
+    return _data.front(); 
+  } else {
+    return -1; 
+  }
+}
+
+int BLESerial::read(void) 
+{
+    uint8_t c = _data.front(); 
+    _data.pop(); 
+    return c; 
+}
+
+

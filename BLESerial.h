@@ -13,6 +13,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <BLE2904.h>
+#include <queue>
 
 #define UART_SERVICE_UUID      "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E" 
@@ -30,6 +31,7 @@ class BLESerial: public Stream, public BLEServerCallbacks, public BLECharacteris
     BLEService *_pUARTService{nullptr}; 
     BLECharacteristic * _pTxCharacteristic{nullptr};
     BLECharacteristic * _pRxCharacteristic{nullptr};
+    std::queue<uint8_t> _data; 
 
 public:
     BLESerial();
@@ -45,25 +47,20 @@ public:
 
     int available(void) override;
 
-    int peek(void) override
-    {
-        // this may return -1, but that's okay
-        return 0; 
-    }
-
-    int read(void) override
-    {
-        // this may return -1, but that's okay
-        return 0; 
-    }
-
-
+    int peek(void) override; 
+    int read(void) override; 
     void flush(void) override;
 
     size_t write(uint8_t c) override
     {
-        return 0;
+        if (_deviceConnected && _pTxCharacteristic) 
+        {
+          _pTxCharacteristic->setValue(&c, 1);
+          _pTxCharacteristic->notify();        
+        }
+        return 1;
     }
+
     inline size_t write(unsigned long n)
     {
         return write((uint8_t) n);
@@ -80,14 +77,21 @@ public:
     {
         return write((uint8_t) n);
     }
-    size_t write(const uint8_t *buffer, size_t size)
+    size_t write( const uint8_t *buffer, size_t size) override
     {
-        return 0; //uart_write(_uart, (const char*)buffer, size);
+        if (_deviceConnected && _pTxCharacteristic) 
+        {
+          _pTxCharacteristic->setValue(  (uint8_t*)buffer, size);
+          _pTxCharacteristic->notify();        
+        }
+        return size; 
     }
-    size_t write(const char *buffer)
+
+    size_t write(char *buffer)
     {
-        return 0; //buffer? uart_write(_uart, buffer, strlen(buffer)): 0;
+        return buffer? write( (uint8_t*)buffer, strlen(buffer)): 0;
     }
+
     operator bool() const
     {
         return _init;//_uart != 0;
