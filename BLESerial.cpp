@@ -55,9 +55,10 @@ bool BLESerial::init()
 
 bool BLESerial::begin(const char * device)
 {
-  if (!_init) {
+  if (!_init && device) {
     BLEDevice::init(device);
     _pServer = BLEDevice::createServer();
+    _createdServer = true; 
     return init();
   } else {
     return false;
@@ -69,7 +70,6 @@ bool BLESerial::begin(BLEServer *server)
 {
   if (!_init) {
     _pServer = server;
-
     return init();
   } else {
     return false;
@@ -77,12 +77,22 @@ bool BLESerial::begin(BLEServer *server)
 }
 
 //  unsure if need to stop advertising here.. there is no func to remove advert for service...
+//  probably need to delete server... but not if provided externally... some extra work....  
 void BLESerial::end()
 {
   if (_init && _pServer && _pUARTService) {
+    _pTxCharacteristic = nullptr; //  not sure if you need to remove them... no remove characteristic... 
+    _pRxCharacteristic = nullptr; 
+
     _pUARTService->stop();
-    _pServer.removeService(_pUARTService);
+    _pServer->removeService(_pUARTService);
+    _pUARTService = nullptr; 
     _init = false;
+
+    if (_createdServer) {
+      _pServer.deinit(true); 
+      delete _pServer;    //  createServer() calls new, but there is no delete... 
+    }
   }
 
 }
@@ -105,6 +115,7 @@ void BLESerial::onDisconnect(BLEServer* pServer)
 
 void BLESerial::onWrite(BLECharacteristic *pCharacteristic)
 {
+  if (!pCharacteristic) { Serial.println("***********************CRASH PREVENTED***************");  return; }
   std::string rxValue = pCharacteristic->getValue();
   if (rxValue.length() > 0) {
     for (int i = 0; i < rxValue.length(); i++) {
@@ -133,7 +144,7 @@ int BLESerial::peek(void)
 
 int BLESerial::read(void)
 {
-  if (data.size()) {
+  if (_data.size()) {
     uint8_t c = _data.front();
     _data.pop();
     return c;

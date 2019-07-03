@@ -41,6 +41,7 @@ public:
     bool begin(BLEServer *server); 
     void end();
     bool hasClient(void);
+    void flush() override {};  
 
     int available(void) override;
 
@@ -77,7 +78,7 @@ public:
     {
         if (_deviceConnected && _pTxCharacteristic) 
         {
-          _pTxCharacteristic->setValue(  (uint8_t*)buffer, size);
+          _pTxCharacteristic->setValue((uint8_t*)buffer, size);
           _pTxCharacteristic->notify();        
         }
         return size; 
@@ -97,6 +98,7 @@ protected:
 
     size_t _rx_size;
     bool _deviceConnected{false}; 
+    bool _createdServer{false}; 
 };
 
 
