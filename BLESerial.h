@@ -13,7 +13,8 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <BLE2904.h>
-#include <queue>
+//#include <queue>
+#include "FreeRTOS.h"
 
 #define UART_SERVICE_UUID      "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E" 
@@ -31,7 +32,9 @@ class BLESerial: public Stream, public BLEServerCallbacks, public BLECharacteris
     BLEService *_pUARTService{nullptr}; 
     BLECharacteristic * _pTxCharacteristic{nullptr};
     BLECharacteristic * _pRxCharacteristic{nullptr};
-    std::queue<uint8_t> _data; 
+    //std::queue<uint8_t> _data; 
+    xQueueHandle _queue;
+    size_t _queueSize{512}; 
 
 public:
     BLESerial();
@@ -44,6 +47,7 @@ public:
     void flush() override {};  
 
     int available(void) override;
+    size_t setRxBufferSize(size_t);
 
     int peek(void) override; 
     int read(void) override; 

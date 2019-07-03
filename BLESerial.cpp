@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
 #include <inttypes.h>
 #include "Arduino.h"
 #include "BLESerial.h"
@@ -20,6 +21,12 @@ BLESerial::BLESerial()
 bool BLESerial::init()
 {
   if (!_pServer) { return false; }
+
+  _queue = xQueueCreate( _queueSize ,sizeof(uint8_t)); 
+
+  if (!_queue) {
+    return false; 
+  }
 
   _pServer->setCallbacks(this);
 
@@ -80,6 +87,11 @@ bool BLESerial::begin(BLEServer *server)
 //  probably need to delete server... but not if provided externally... some extra work....  
 void BLESerial::end()
 {
+  if (_queue) {
+    vQueueDelete(_queue); 
+    _queue = nullptr; 
+  }
+
   if (_init && _pServer && _pUARTService) {
     _pTxCharacteristic = nullptr; //  not sure if you need to remove them... no remove characteristic... 
     _pRxCharacteristic = nullptr; 
@@ -90,8 +102,9 @@ void BLESerial::end()
     _init = false;
 
     if (_createdServer) {
-      _pServer.deinit(true); 
+      BLEDevice::deinit(true); 
       delete _pServer;    //  createServer() calls new, but there is no delete... 
+      _pServer = nullptr; 
     }
   }
 
@@ -99,7 +112,12 @@ void BLESerial::end()
 
 int BLESerial::available(void)
 {
-  return _data.size() ; //result;
+  if (_queue) {
+    return uxQueueMessagesWaiting(_queue); 
+  } else {
+    return 0; 
+  }
+  
 }
 
 void BLESerial::onConnect(BLEServer* pServer)
@@ -115,14 +133,20 @@ void BLESerial::onDisconnect(BLEServer* pServer)
 
 void BLESerial::onWrite(BLECharacteristic *pCharacteristic)
 {
-  if (!pCharacteristic) { Serial.println("***********************CRASH PREVENTED***************");  return; }
-  std::string rxValue = pCharacteristic->getValue();
+  if (!pCharacteristic) { 
+    log_v("no pCharacteristic");  
+    return; 
+  }
+
+  if (!_queue) {
+    log_v("No Queue");
+    return; 
+  }
+
+  const std::string & rxValue = pCharacteristic->getValue();
   if (rxValue.length() > 0) {
-    for (int i = 0; i < rxValue.length(); i++) {
-      if (_data.size() == 512) {
-        _data.pop();
-      }
-      _data.push(rxValue[i]);
+     for (int i = 0; i < rxValue.length(); i++) {
+       xQueueSend(_queue, & rxValue[i], 0 ); 
     }
   }
 }
@@ -135,22 +159,45 @@ bool BLESerial::hasClient()
 
 int BLESerial::peek(void)
 {
-  if (_data.size()) {
-    return _data.front();
-  } else {
-    return -1;
+  uint8_t item; 
+  if (_queue) {
+    if(xQueuePeek(_queue, &item, 0 )) {
+      return item; 
+    }
   }
+  return -1; 
 }
 
 int BLESerial::read(void)
 {
-  if (_data.size()) {
-    uint8_t c = _data.front();
-    _data.pop();
-    return c;
-  } else {
-    return -1;
+  uint8_t item; 
+  if (_queue) {
+    if (xQueueReceive(_queue, &item, 0 )) {
+      return item; 
+    }
   }
+  return -1; 
 }
 
+//  must be called before begin... at the moment... 
+size_t BLESerial::setRxBufferSize(size_t len)
+{
+  if (len == _queueSize) {
+    return _queueSize; 
+  }
+  _queueSize = len;
+  
+  if (_queue) {
+    vQueueDelete(_queue); 
+    _queue = nullptr; 
+  } 
+
+  _queue = xQueueCreate( _queueSize ,sizeof(uint8_t)); 
+
+  if (_queue) {
+    return _queueSize; 
+  }
+  
+  return 0; 
+}
 
